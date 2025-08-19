@@ -3,8 +3,10 @@
     "rootDir": "src",
     "outDir": "dist",
     "module": "nodenext",
-    "target": "esnext",
-    "strict": true,
-    "skipLibCheck": true
+    "moduleResolution": "nodenext",
+    "target": "ES2022",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "types": ["node"]
   }
 }

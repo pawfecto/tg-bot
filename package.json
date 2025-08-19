@@ -12,12 +12,17 @@
     "dev": "nodemon --exec ts-node src/index.ts"
   },
   "devDependencies": {
+    "@types/express": "^5.0.3",
     "@types/node": "^24.3.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.2"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.55.0",
+    "dotenv": "^17.2.1",
     "exceljs": "^4.4.0",
+    "express": "^5.1.0",
+    "pino": "^9.9.0",
     "telegraf": "^4.16.3"
   }
 }
