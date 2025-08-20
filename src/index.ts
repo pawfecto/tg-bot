@@ -9,10 +9,12 @@ import { ensureBucket } from './lib/storage';
 // handlers
 import { registerAuthHandlers } from './bot/handlers/auth';
 import { registerQuickShipment } from './bot/handlers/quickShipment';
+
 import { registerIntakeHandlers } from './bot/handlers/intake';
 import { registerReportHandlers } from './bot/handlers/reports';
 import { registerManagerMenu } from './bot/handlers/managerMenu';
 import { registerFallback } from './bot/handlers/fallback';
+import { registerShipmentEdit } from './bot/handlers/shipmentEdit';
 
 const bot = new Telegraf(ENV.BOT_TOKEN);
 
@@ -23,6 +25,7 @@ async function main() {
   // Регистрация всех хэндлеров
   registerAuthHandlers(bot);
   registerQuickShipment(bot);
+  registerShipmentEdit(bot);
   registerIntakeHandlers(bot);
   registerReportHandlers(bot);
   registerManagerMenu(bot);

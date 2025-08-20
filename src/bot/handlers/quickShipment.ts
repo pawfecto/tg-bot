@@ -7,6 +7,8 @@ import { uploadPhotoToStorage, makeStoragePath } from '../../lib/storage';
 import { logPhotoLikeExcel } from '../../lib/photoLogs';
 import { supabase } from '../../lib/supabase';
 import { notifyShipment } from '../../lib/notifymg';
+import { Markup } from 'telegraf';
+
 
 // Разрешаем любые коды клиента (буквы/цифры/._-), затем паллеты/коробки/вес
 const HEAR_RE =
@@ -34,8 +36,12 @@ export function registerQuickShipment(bot: Telegraf) {
         source_text: parsed.sourceText
       });
 
-      await ctx.reply(`✅ Заявка создана для ${parsed.clientCode}. Уведомляю...`);
-      await notifyShipment(bot, shipmentId, { managers: 'all', includeClient: true });
+      await ctx.reply(
+  `✅ Заявка создана для ${parsed.clientCode}. Уведомляю...`,
+  Markup.inlineKeyboard([ [Markup.button.callback('✏️ Исправить', `sh:edit:${shipmentId}`)] ])
+);
+await notifyShipment(bot, shipmentId, { managers: 'all', includeClient: true });
+
     } catch (e) {
       console.error('text shipment error', e);
       await ctx.reply('⛔ Не удалось создать заявку из текста.');
@@ -104,12 +110,12 @@ export function registerQuickShipment(bot: Telegraf) {
             storage_path: storagePath
           });
 
-          await ctx.reply(`✅ Заявка создана: ${parsed.clientCode}. Фото сохранено.`);
+          await ctx.reply(
+  `✅ Заявка создана: ${parsed.clientCode}. Фото сохранено.`,
+  Markup.inlineKeyboard([ [Markup.button.callback('✏️ Исправить', `sh:edit:${shipmentId}`)] ])
+);
+if (!mgid) await notifyShipment(bot, shipmentId, { managers: 'all', includeClient: true });
 
-          // Одиночное фото → уведомляем сразу; альбом — после последнего кадра (ниже debounce)
-          if (!mgid) {
-            await notifyShipment(bot, shipmentId, { managers: 'all', includeClient: true });
-          }
         }
       }
 
