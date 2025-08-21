@@ -1,12 +1,8 @@
+// src/lib/notifymg.ts
 import { Telegraf } from 'telegraf';
 import { supabase } from './supabase';
-import {
-  loadShipmentSummary,   // уже есть в lib/shipments.ts
-  makeCaption,           // уже есть в lib/shipments.ts
-  recipientsByClientId   // уже есть в lib/shipments.ts
-} from './shipments';
+import { loadShipmentSummary, makeCaption, recipientsByClientId } from './shipments';
 
-/** Все менеджеры/админы (is_verified = true) */
 export async function recipientsManagersAll(): Promise<number[]> {
   const { data, error } = await supabase
     .from('tg_users')
@@ -17,7 +13,6 @@ export async function recipientsManagersAll(): Promise<number[]> {
   return (data ?? []).map((u: any) => Number(u.telegram_id));
 }
 
-/** Менеджеры, привязанные к конкретному клиенту через manager_clients */
 export async function recipientsManagersForClient(clientId: string): Promise<number[]> {
   const { data: mcs, error: e1 } = await supabase
     .from('manager_clients')
@@ -40,60 +35,83 @@ export async function recipientsManagersForClient(clientId: string): Promise<num
 }
 
 type NotifyOpts = {
-  /** Кого из менеджеров уведомлять: всех ('all'), только привязанных к клиенту ('by_client') или никого ('none') */
   managers?: 'all' | 'by_client' | 'none';
-  /** Уведомлять ли самого клиента (всех его подтверждённых tg_users) */
   includeClient?: boolean;
-  /** Сколько фото максимум отправлять в альбоме (Telegram лимит 10) */
+  /** created → по умолчанию с фото; updated → по умолчанию без фото */
+  event?: 'created' | 'updated';
+  /** Явно включить/выключить отправку фото (перекрывает поведение по умолчанию) */
+  withPhotos?: boolean;
+  /** Исключить этих получателей (например, автора правки) */
+  excludeChatIds?: number[];
+  /** Сколько фото максимум (ограничение Telegram — 10) */
   maxPhotos?: number;
+  /** Полезно, если хочешь вписать изменения в caption (makeCaption поддерживает) */
+  changes?: Partial<{ code: string; pallets: number; boxes: number; gross: number }>;
 };
 
-/**
- * Уведомление о поставке:
- * - клиент (если includeClient=true)
- * - менеджеры (все/по клиенту/никто)
- */
 export async function notifyShipment(bot: Telegraf, shipmentId: string, opts: NotifyOpts = {}) {
-  const { managers = 'all', includeClient = true, maxPhotos = 10 } = opts;
+  const {
+    managers = 'all',
+    includeClient = true,
+    event = 'created',
+    maxPhotos = 10,
+    excludeChatIds = [],
+    withPhotos,
+    changes,
+  } = opts;
 
-  // Берём сводку и до 10 фото
   const { s, client, photos } = await loadShipmentSummary(shipmentId);
+
+  // поведение по умолчанию для фото
+  const sendPhotos = typeof withPhotos === 'boolean'
+    ? withPhotos
+    : (event === 'created');
+
   const caption = makeCaption({
     clientCode: client.client_code,
     fullName: client.full_name,
-    pallets: s.pallets,
-    boxes: s.boxes,
-    gross: Number(s.gross_kg)
+    pallets: (s as any).pallets ?? undefined,
+    boxes: (s as any).boxes,
+    gross: Number((s as any).gross_kg),
+    event,
+    changes,
+    created_at: (s as any).created_at ?? null,
+    updated_at: (s as any).updated_at ?? null,
   });
 
-  // Получатели
   const toClients  = includeClient ? await recipientsByClientId(s.client_id) : [];
   const toManagers =
-    managers === 'all'      ? await recipientsManagersAll()
+    managers === 'all'       ? await recipientsManagersAll()
   : managers === 'by_client' ? await recipientsManagersForClient(s.client_id)
   : [];
 
-  // Дедупликация
-  const recipients = Array.from(new Set<number>([...toClients, ...toManagers]));
+  // дедуп + исключения (не уведомляем автора правки)
+  const excluded = new Set<number>(excludeChatIds);
+  const recipients = Array.from(new Set<number>([...toClients, ...toManagers]))
+    .filter((id) => !excluded.has(id));
+
   if (recipients.length === 0) return;
 
-  // Готовим медиа (до maxPhotos)
   const list = photos.slice(0, Math.min(maxPhotos, 10));
-  const sendMediaGroup = list.length > 1;
-  const firstPhoto = list[0];
+  const canSendAlbum = sendPhotos && list.length > 1;
+  const singlePhoto  = sendPhotos && list.length === 1 ? list[0] : null;
 
   for (const chatId of recipients) {
-    if (list.length === 0) {
-      await bot.telegram.sendMessage(chatId, caption);
-    } else if (!sendMediaGroup) {
-      await bot.telegram.sendPhoto(chatId, firstPhoto.telegram_file_id, { caption });
-    } else {
-      const media = list.map((p: any, i: number) => ({
-        type: 'photo' as const,
-        media: p.telegram_file_id,
-        ...(i === 0 ? { caption } : {})
-      }));
-      await bot.telegram.sendMediaGroup(chatId, media);
+    try {
+      if (!sendPhotos || list.length === 0) {
+        await bot.telegram.sendMessage(chatId, caption);
+      } else if (singlePhoto) {
+        await bot.telegram.sendPhoto(chatId, singlePhoto.telegram_file_id, { caption });
+      } else {
+        const media = list.map((p: any, i: number) => ({
+          type: 'photo' as const,
+          media: p.telegram_file_id,
+          ...(i === 0 ? { caption } : {}),
+        }));
+        await bot.telegram.sendMediaGroup(chatId, media);
+      }
+    } catch {
+      // пропустим сбои доставки, чтобы не падал весь цикл
     }
   }
 }
