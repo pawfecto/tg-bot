@@ -26,6 +26,7 @@ import { registerIntakeHandlers } from './bot/handlers/intake';
 import { registerReportHandlers } from './bot/handlers/reports';
 import { registerManagerMenu } from './bot/handlers/managerMenu';
 import { registerFallback } from './bot/handlers/fallback';
+import { registerProfileHandlers } from './bot/handlers/profile';
 
 async function main() {
   // Инициализация хранилища Supabase
@@ -34,6 +35,7 @@ async function main() {
   // Регистрация хэндлеров
   registerRegistration(bot);      // мастер регистрации (номер → страна → доставка → код)
   registerAuthHandlers(bot);      // старт/контакт → авторизация (если есть)
+  registerProfileHandlers(bot);
   registerManagerMenu(bot);       // меню менеджера
   registerShipmentPhotos(bot);    // фото (создание/добавление/замена/удаление + уведомления)
   registerIntakeHandlers(bot);    // другие сценарии приёмки (если есть)
